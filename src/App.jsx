@@ -194,9 +194,15 @@ function CoursePage({ courseId, store, scores, onClose, onToggleBookmark, onStar
       </div>
 
       <div className="action-btns">
-        <button><span className="icon">🌐</span>Website</button>
-        <button><span className="icon">📞</span>Call</button>
-        <button><span className="icon">🧭</span>Directions</button>
+        <button onClick={() => window.open(`https://${course.website}`, '_blank', 'noopener')}>
+          <span className="icon">🌐</span>Website
+        </button>
+        <button onClick={() => { window.location.href = `tel:${course.phone.replace(/[^+\d]/g, '')}` }}>
+          <span className="icon">📞</span>Call
+        </button>
+        <button onClick={() => window.open(`https://maps.google.com/?daddr=${course.lat},${course.lng}`, '_blank', 'noopener')}>
+          <span className="icon">🧭</span>Directions
+        </button>
       </div>
 
       <div className="scores-strip">
