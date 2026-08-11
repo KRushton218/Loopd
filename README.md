@@ -5,8 +5,10 @@ see where your friends are teeing it up, and plan trips around clusters of great
 
 ## Try it
 
-The app is a mobile-first web prototype — open it on your phone or in a narrow
-browser window:
+**Live now: [krushton218.github.io/Loopd](https://krushton218.github.io/Loopd/)** —
+open it on your phone for the intended experience.
+
+To run it locally instead:
 
 ```
 npm install
