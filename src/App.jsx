@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  currentUser, users, courses, feed, recs, guides,
-  leaderboard, userById, courseById,
+  currentUser, users, feed, recs, guides,
+  leaderboard, userById, courseById, allCourses, registerCourse,
 } from './data.js'
+import { searchLiveCourses } from './liveSearch.js'
 import {
   initialStore, saveStore, computeScores, playedIds, isPlayed, BANDS, BAND_ORDER,
 } from './store.js'
@@ -90,12 +91,14 @@ function Photo({ photo, className }) {
 }
 
 function CourseRow({ course, rank, score, onOpen }) {
+  const place = [course.city, course.state || course.country].filter(Boolean).join(', ')
+  const sub = [place, course.access].filter(Boolean).join(' · ')
   return (
-    <div className="row" onClick={() => onOpen(course.id)}>
+    <div className="row" onClick={() => onOpen(course)}>
       {rank != null && <div className="rank-num">{rank}</div>}
       <div>
         <div className="title">{course.name}</div>
-        <div className="sub">{course.city}, {course.state} · {course.access}</div>
+        <div className="sub">{sub}</div>
       </div>
       <div className="right">
         <ScorePill score={score ?? course.rating} small />
@@ -121,8 +124,9 @@ function SearchOverlay({ onClose, onOpenCourse }) {
   const [mode, setMode] = useState('courses')
   const [q, setQ] = useState('')
   const [loc, setLoc] = useState('')
+  const [live, setLive] = useState({ results: [], loading: false, error: false })
 
-  const courseResults = courses.filter((c) => {
+  const courseResults = allCourses().filter((c) => {
     const okQ = !q || c.name.toLowerCase().includes(q.toLowerCase())
     const hay = `${c.city} ${c.state} ${c.region} ${c.country}`.toLowerCase()
     const okLoc = !loc || hay.includes(loc.toLowerCase())
@@ -130,6 +134,30 @@ function SearchOverlay({ onClose, onOpenCourse }) {
   })
   const userResults = users.filter((u) =>
     !q || u.name.toLowerCase().includes(q.toLowerCase()) || u.username.toLowerCase().includes(q.toLowerCase()))
+
+  // Live worldwide course search (OpenStreetMap) once the query is real.
+  useEffect(() => {
+    const query = [q.trim(), loc.trim()].filter(Boolean).join(' ')
+    if (mode !== 'courses' || q.trim().length < 3) {
+      setLive({ results: [], loading: false, error: false })
+      return
+    }
+    const ctrl = new AbortController()
+    setLive((l) => ({ ...l, loading: true, error: false }))
+    const t = setTimeout(async () => {
+      try {
+        const results = await searchLiveCourses(query, ctrl.signal)
+        setLive({ results, loading: false, error: false })
+      } catch (e) {
+        if (e.name !== 'AbortError') setLive({ results: [], loading: false, error: true })
+      }
+    }, 350)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [q, loc, mode])
+
+  // Don't repeat courses already shown from Loopd's own list.
+  const shownNames = new Set(courseResults.map((c) => c.name.toLowerCase()))
+  const liveResults = live.results.filter((c) => !shownNames.has(c.name.toLowerCase()))
 
   return (
     <div className="search-overlay">
@@ -154,13 +182,29 @@ function SearchOverlay({ onClose, onOpenCourse }) {
         <button className="cancel-link" onClick={onClose}>Cancel</button>
       </div>
       <div className="results">
-        {mode === 'courses'
-          ? (courseResults.length
-              ? courseResults.map((c) => <CourseRow key={c.id} course={c} onOpen={onOpenCourse} />)
-              : <div className="empty-state">No courses match — try widening the location.</div>)
-          : (userResults.length
-              ? userResults.map((u) => <UserRow key={u.id} user={u} />)
-              : <div className="empty-state">No Looprs found.</div>)}
+        {mode === 'courses' ? (
+          <>
+            {courseResults.map((c) => <CourseRow key={c.id} course={c} onOpen={onOpenCourse} />)}
+            {liveResults.map((c) => <CourseRow key={c.id} course={c} onOpen={onOpenCourse} />)}
+            {live.loading && <div className="empty-state">Searching all courses…</div>}
+            {!live.loading && !courseResults.length && !liveResults.length && (
+              <div className="empty-state">
+                {live.error
+                  ? 'Course search is unreachable right now — check your connection.'
+                  : q.trim().length < 3
+                    ? 'Keep typing to search every course worldwide.'
+                    : 'No courses match — try the full course name.'}
+              </div>
+            )}
+            {(liveResults.length > 0 || live.loading) && (
+              <div className="search-note">Course search data © OpenStreetMap contributors</div>
+            )}
+          </>
+        ) : (
+          userResults.length
+            ? userResults.map((u) => <UserRow key={u.id} user={u} />)
+            : <div className="empty-state">No Looprs found.</div>
+        )}
       </div>
     </div>
   )
@@ -182,24 +226,42 @@ function CoursePage({ courseId, store, scores, onClose, onToggleBookmark, onStar
         <div className="hero-bottom">
           <h1>{course.name}</h1>
           <div className="hero-rating">
-            <div className="big">{course.rating.toFixed(1)}</div>
-            <div className="n">{course.numRatings.toLocaleString()} ratings</div>
+            {course.rating != null ? (
+              <>
+                <div className="big">{course.rating.toFixed(1)}</div>
+                <div className="n">{course.numRatings.toLocaleString()} ratings</div>
+              </>
+            ) : (
+              <div className="n">No Loopd ratings yet</div>
+            )}
           </div>
         </div>
       </div>
 
       <div className="course-meta">
-        <div className="loc">{course.city}, {course.state}, {course.country}</div>
-        <div className="facts">{course.access} · Par {course.par} · {course.yardage.toLocaleString()} yds · {course.region}</div>
+        <div className="loc">{[course.city, course.state, course.country].filter(Boolean).join(', ')}</div>
+        {(() => {
+          const facts = [
+            course.access,
+            course.par && `Par ${course.par}`,
+            course.yardage && `${course.yardage.toLocaleString()} yds`,
+            course.region,
+          ].filter(Boolean).join(' · ')
+          return facts ? <div className="facts">{facts}</div> : null
+        })()}
       </div>
 
       <div className="action-btns">
-        <button onClick={() => window.open(`https://${course.website}`, '_blank', 'noopener')}>
-          <span className="icon">🌐</span>Website
-        </button>
-        <button onClick={() => { window.location.href = `tel:${course.phone.replace(/[^+\d]/g, '')}` }}>
-          <span className="icon">📞</span>Call
-        </button>
+        {course.website && (
+          <button onClick={() => window.open(`https://${course.website}`, '_blank', 'noopener')}>
+            <span className="icon">🌐</span>Website
+          </button>
+        )}
+        {course.phone && (
+          <button onClick={() => { window.location.href = `tel:${course.phone.replace(/[^+\d]/g, '')}` }}>
+            <span className="icon">📞</span>Call
+          </button>
+        )}
         <button onClick={() => window.open(`https://maps.google.com/?daddr=${course.lat},${course.lng}`, '_blank', 'noopener')}>
           <span className="icon">🧭</span>Directions
         </button>
@@ -207,7 +269,9 @@ function CoursePage({ courseId, store, scores, onClose, onToggleBookmark, onStar
 
       <div className="scores-strip">
         <div className="score-box">
-          <div className="val">{course.rating.toFixed(1)}</div>
+          {course.rating != null
+            ? <div className="val">{course.rating.toFixed(1)}</div>
+            : <div className="val empty">No ratings</div>}
           <div className="lbl">Avg</div>
         </div>
         <div className="score-box">
@@ -217,7 +281,9 @@ function CoursePage({ courseId, store, scores, onClose, onToggleBookmark, onStar
           <div className="lbl">You</div>
         </div>
         <div className="score-box">
-          <div className="val">{course.friendsScore.toFixed(1)}</div>
+          {course.friendsScore != null
+            ? <div className="val">{course.friendsScore.toFixed(1)}</div>
+            : <div className="val empty">—</div>}
           <div className="lbl">Friends</div>
         </div>
       </div>
@@ -289,7 +355,7 @@ function FeedTab({ onOpenSearch, onOpenMap, onOpenCourse }) {
                 </div>
                 <div className="score-pill" style={{ marginLeft: 'auto' }}>{item.score.toFixed(1)}</div>
               </div>
-              <div className="feed-course" onClick={() => onOpenCourse(c.id)}>
+              <div className="feed-course" onClick={() => onOpenCourse(c)}>
                 {c.name} <span>· {c.city}, {c.state}</span>
               </div>
               {item.note && <div className="feed-note">“{item.note}”</div>}
@@ -425,7 +491,7 @@ function ProfileTab({ store, scores, onOpenCourse }) {
         {myPlayed.slice(0, 3).map((id) => {
           const c = courseById(id)
           return (
-            <div className="row" key={'act' + id} onClick={() => onOpenCourse(id)}>
+            <div className="row" key={'act' + id} onClick={() => onOpenCourse(c)}>
               <div className="avatar">{currentUser.avatar}</div>
               <div>
                 <div className="title">You ranked {c.name}</div>
@@ -452,7 +518,17 @@ export default function App() {
   useEffect(() => { saveStore(store) }, [store])
   const scores = useMemo(() => computeScores(store.bands), [store.bands])
 
-  const openCourse = (id) => setCourseId(id)
+  // Accepts a full course object; live-search finds register + persist so
+  // they survive reloads and resolve everywhere a courseId is stored.
+  const openCourse = (course) => {
+    if (course.source === 'osm') {
+      registerCourse(course)
+      setStore((s) => s.customCourses.some((c) => c.id === course.id)
+        ? s
+        : { ...s, customCourses: [...s.customCourses, course] })
+    }
+    setCourseId(course.id)
+  }
 
   const toggleBookmark = (id) => setStore((s) => ({
     ...s,
@@ -505,7 +581,7 @@ export default function App() {
       {mapOpen && (
         <MapView scores={scores} bookmarks={store.bookmarks}
           playedSet={new Set(playedIds(store))}
-          onOpenCourse={(id) => { setMapOpen(false); openCourse(id) }}
+          onOpenCourse={(id) => { setMapOpen(false); openCourse(courseById(id)) }}
           onClose={() => setMapOpen(false)} />
       )}
       {courseId && (

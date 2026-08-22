@@ -92,7 +92,7 @@ Directions should prefer an Apple Maps deep link on iOS.)
 
 | Interaction | Works today via | Real transition | Vendor/API | Phase |
 |---|---|---|---|---|
-| **Search → Courses** (`SearchOverlay`) | Substring filter over 10 mock courses | Postgres `pg_trgm` + FTS over the seeded `courses` table (~16.8k US rows); Typesense/Algolia only if ranking quality demands it (PLAN §6) | **OGA + OSM** seed; own DB | 1 |
+| **Search → Courses** (`SearchOverlay`) | ~~Substring filter over 10 mock courses~~ **Now live**: mock filter + worldwide OSM search (Photon geocoder, keyless, filtered to `leisure=golf_course`, ODbL attribution in results). Found courses are rankable/bookmarkable and persist locally (`store.customCourses`). | Same endpoint state moves server-side: Postgres `pg_trgm` + FTS over the seeded `courses` table; Photon results become the OSM half of the seed. Google Places stays display-time-only (a browser-exposed Places key on a static site was the reason to prefer OSM here too) | **OGA + OSM** seed; own DB | 1 |
 | **Search location field** | Substring match on `city/state/region` strings | Same FTS + PostGIS `ST_DWithin` for "near X"; geocode the query via Mapbox Geocoding (bundled in Mapbox account) | Mapbox / own DB | 1 |
 | **Search → Looprs** | Substring filter over 7 mock users | FTS over `users` table (username, name) | Own DB (Supabase) | 2 |
 | **Bookmark toggle** (course hero 🔖) | `store.bookmarks` in localStorage | `bookmarks` table upsert/delete, RLS-scoped to the user | Supabase | 1 |
