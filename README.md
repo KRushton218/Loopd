@@ -19,7 +19,10 @@ Then visit http://localhost:5173.
 
 ## What works today
 
-- **Home** — friends' rounds feed + search (courses or Looprs, with a location filter)
+- **Home** — friends' rounds feed + search (courses or Looprs, with a location filter).
+  Course search is **live**: type any course name and results come from
+  OpenStreetMap's worldwide golf-course data, not just the demo seed — you can
+  open, bookmark, and rank any course you find.
 - **Rank a course** — Beli-style: *Loved it / Liked it / Not for me*, then quick
   head-to-head "which was better?" matchups slot it into your list and every course
   gets a 0–10 score. Your rankings persist locally.

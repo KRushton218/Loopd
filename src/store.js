@@ -1,6 +1,6 @@
 // localStorage-backed user state: your ranked courses (Beli-style bands),
 // bookmarks, and check-in notes. This is the layer a real backend replaces.
-import { played, bookmarked, courseById } from './data.js'
+import { played, bookmarked, courseById, registerCourse } from './data.js'
 
 const KEY = 'loopd-v1'
 
@@ -15,7 +15,12 @@ export const BAND_ORDER = ['loved', 'liked', 'notForMe']
 export function initialStore() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY))
-    if (saved && saved.bands) return saved
+    if (saved && saved.bands) {
+      // Re-register live-search courses so their ids resolve after reload.
+      saved.customCourses = saved.customCourses ?? []
+      saved.customCourses.forEach(registerCourse)
+      return saved
+    }
   } catch { /* corrupted or absent — fall through to seed */ }
 
   // Seed from the demo data: place pre-played courses into bands by their score.
@@ -31,6 +36,7 @@ export function initialStore() {
     bands,
     bookmarks: [...bookmarked],
     checkins: played.map((id) => ({ courseId: id, note: '', date: null })),
+    customCourses: [],
   }
 }
 

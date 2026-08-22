@@ -222,4 +222,14 @@ export const leaderboard = [
 export const userById = (id) =>
   id === 'u0' ? currentUser : users.find((u) => u.id === id)
 
-export const courseById = (id) => courses.find((c) => c.id === id)
+// Courses discovered via live search (OSM) register here so courseById,
+// lists, the map, and the rank flow resolve them exactly like seed courses.
+const customCourses = new Map()
+
+export function registerCourse(course) {
+  if (!courses.some((c) => c.id === course.id)) customCourses.set(course.id, course)
+}
+
+export const allCourses = () => [...courses, ...customCourses.values()]
+
+export const courseById = (id) => courses.find((c) => c.id === id) ?? customCourses.get(id)

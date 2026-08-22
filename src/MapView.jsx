@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { courses } from './data.js'
+import { allCourses } from './data.js'
 
 // Trip-planning map: every course pinned, colored by your relationship to it.
 // Clusters of nearby pins are exactly the "plan a trip around these" signal.
@@ -19,7 +19,7 @@ export default function MapView({ scores, bookmarks, playedSet, onOpenCourse, on
     }).addTo(map)
 
     const bounds = []
-    for (const c of courses) {
+    for (const c of allCourses()) {
       const isPlayed = playedSet.has(c.id)
       const isSaved = bookmarks.includes(c.id)
       const cls = isPlayed ? 'played' : isSaved ? 'saved' : 'other'
@@ -31,8 +31,9 @@ export default function MapView({ scores, bookmarks, playedSet, onOpenCourse, on
         iconAnchor: [17, 17],
       })
       const m = L.marker([c.lat, c.lng], { icon }).addTo(map)
+      const place = [c.city, c.state || c.country].filter(Boolean).join(', ')
       m.bindPopup(
-        `<b>${c.name}</b><br>${c.city}, ${c.state} · ${c.rating.toFixed(1)}<br>` +
+        `<b>${c.name}</b><br>${place}${c.rating != null ? ' · ' + c.rating.toFixed(1) : ''}<br>` +
         `<a href="#" data-course="${c.id}" class="popup-link">Open course →</a>`
       )
       bounds.push([c.lat, c.lng])

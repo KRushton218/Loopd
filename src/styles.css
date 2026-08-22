@@ -633,3 +633,11 @@ body {
 .map-pin.played { background: var(--green-500); }
 .map-pin.saved { background: var(--amber); }
 .popup-link { font-weight: 700; color: var(--green-600); }
+
+/* Live search (OpenStreetMap) */
+.search-note {
+  padding: 10px 18px 18px;
+  font-size: 11px;
+  color: var(--ink-3);
+  text-align: center;
+}
