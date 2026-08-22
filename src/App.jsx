@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   currentUser, users, feed, recs, guides,
   leaderboard, userById, courseById, allCourses, registerCourse,
@@ -9,71 +10,10 @@ import {
 } from './store.js'
 import RankFlow from './RankFlow.jsx'
 import MapView from './MapView.jsx'
-
-// Deterministic pseudo-random from a string, so each course gets its own
-// stable "map silhouette" without storing artwork.
-function seeded(str) {
-  let h = 2166136261
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) }
-  return () => {
-    h = Math.imul(h ^ (h >>> 15), 2246822519)
-    h = Math.imul(h ^ (h >>> 13), 3266489917)
-    return ((h ^= h >>> 16) >>> 0) / 4294967296
-  }
-}
-
-// Abstract satellite-style silhouette: fairway ribbons, greens, bunkers and a
-// location pin — reads as "this course, on a map".
-function CourseSilhouette({ course }) {
-  const shapes = useMemo(() => {
-    const rnd = seeded(course.id + course.name)
-    const fairways = Array.from({ length: 4 }, (_, i) => {
-      const x = 40 + rnd() * 300
-      const y = 30 + rnd() * 140
-      const rot = rnd() * 360
-      const w = 60 + rnd() * 90
-      return { x, y, rot, w, h: 16 + rnd() * 14, key: 'f' + i }
-    })
-    const greens = fairways.map((f, i) => ({
-      x: f.x + Math.cos((f.rot * Math.PI) / 180) * (f.w / 2 + 8),
-      y: f.y + Math.sin((f.rot * Math.PI) / 180) * (f.h / 2 + 4),
-      r: 7 + rnd() * 5,
-      key: 'g' + i,
-    }))
-    const bunkers = Array.from({ length: 5 }, (_, i) => ({
-      x: 30 + rnd() * 340, y: 25 + rnd() * 150, r: 2.5 + rnd() * 3.5, key: 'b' + i,
-    }))
-    const roads = Array.from({ length: 2 }, (_, i) => {
-      const y = 40 + rnd() * 130
-      return { d: `M -10 ${y} Q ${100 + rnd() * 200} ${y - 60 + rnd() * 120}, 440 ${20 + rnd() * 160}`, key: 'r' + i }
-    })
-    return { fairways, greens, bunkers, roads }
-  }, [course.id, course.name])
-
-  return (
-    <svg viewBox="0 0 430 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <rect width="430" height="230" fill="#dde8df" />
-      {shapes.roads.map((r) => (
-        <path key={r.key} d={r.d} stroke="#c8d4ca" strokeWidth="7" fill="none" />
-      ))}
-      {shapes.fairways.map((f) => (
-        <ellipse key={f.key} cx={f.x} cy={f.y} rx={f.w / 2} ry={f.h / 2}
-          transform={`rotate(${f.rot} ${f.x} ${f.y})`} fill="#a7cbaa" />
-      ))}
-      {shapes.greens.map((g) => (
-        <circle key={g.key} cx={g.x} cy={g.y} r={g.r} fill="#5f9e6b" />
-      ))}
-      {shapes.bunkers.map((b) => (
-        <circle key={b.key} cx={b.x} cy={b.y} r={b.r} fill="#e6d9ae" />
-      ))}
-      <g transform="translate(215, 92)">
-        <path d="M0 -26 C -13 -26 -20 -16 -20 -8 C -20 4 0 22 0 22 C 0 22 20 4 20 -8 C 20 -16 13 -26 0 -26 Z"
-          fill="#1d5c3a" stroke="#fff" strokeWidth="2.5" />
-        <circle cy="-9" r="6.5" fill="#fff" />
-      </g>
-    </svg>
-  )
-}
+import CourseMap from './CourseMap.jsx'
+import { SATELLITE_LAYER } from './imagery.js'
+import { MediaCarousel, PhotoGallery, useCourseMedia } from './CourseMedia.jsx'
+import useMediaQuery, { DESKTOP } from './useMediaQuery.js'
 
 function ScorePill({ score, small }) {
   if (score == null) return null
@@ -211,121 +151,165 @@ function SearchOverlay({ onClose, onOpenCourse }) {
 }
 
 /* ---------------- Course page ---------------- */
+
+// Which sources actually fed this page — shown on desktop so it is obvious
+// where a picture came from, and so a licence-bearing source is never
+// rendered anonymously.
+const PROVIDER_LABELS = {
+  skyfi: 'SkyFi archive',
+  esri: 'Esri / Maxar',
+  wikimedia: 'Wikimedia Commons',
+  google: 'Google',
+  user: 'Loopd members',
+  generated: 'Illustration',
+}
+
 function CoursePage({ courseId, store, scores, onClose, onToggleBookmark, onStartRank }) {
   const course = courseById(courseId)
+  const desktop = useMediaQuery(DESKTOP)
+  const { media, uploads, loading, tier, addPhoto, dropUpload, uploading, uploadError } =
+    useCourseMedia(course, currentUser)
   const saved = store.bookmarks.includes(courseId)
   const yourScore = scores[courseId]
   const checkin = store.checkins.find((c) => c.courseId === courseId && c.note)
 
-  return (
-    <div className="course-page">
-      <div className="course-hero">
-        <CourseSilhouette course={course} />
-        <button className="hero-back" onClick={onClose}>←</button>
-        <button className="hero-bookmark" onClick={() => onToggleBookmark(courseId)}>{saved ? '🔖' : '📑'}</button>
-        <div className="hero-bottom">
-          <h1>{course.name}</h1>
-          <div className="hero-rating">
-            {course.rating != null ? (
-              <>
-                <div className="big">{course.rating.toFixed(1)}</div>
-                <div className="n">{course.numRatings.toLocaleString()} ratings</div>
-              </>
-            ) : (
-              <div className="n">No Loopd ratings yet</div>
+  // Desktop has no back gesture, so Esc has to close the page.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const sources = [...new Set(media.map((m) => PROVIDER_LABELS[m.provider]).filter(Boolean))]
+
+  const page = (
+    <div className={`course-page ${desktop ? 'desktop' : ''}`}
+      onClick={desktop ? (e) => { if (e.target === e.currentTarget) onClose() } : undefined}>
+      <div className="course-scroll">
+        <div className="course-main">
+          <div className="course-hero">
+            <MediaCarousel course={course} media={media} loading={loading}
+              onAddPhoto={addPhoto} addDisabled={uploading} />
+            <button className="hero-back" onClick={onClose}>←</button>
+            <button className="hero-bookmark" onClick={() => onToggleBookmark(courseId)}>{saved ? '🔖' : '📑'}</button>
+            <div className="hero-bottom">
+              <h1>{course.name}</h1>
+              <div className="hero-rating">
+                {course.rating != null ? (
+                  <>
+                    <div className="big">{course.rating.toFixed(1)}</div>
+                    <div className="n">{course.numRatings.toLocaleString()} ratings</div>
+                  </>
+                ) : (
+                  <div className="n">No Loopd ratings yet</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="course-meta">
+            <div className="loc">{[course.city, course.state, course.country].filter(Boolean).join(', ')}</div>
+            {(() => {
+              const facts = [
+                course.access,
+                course.par && `Par ${course.par}`,
+                course.yardage && `${course.yardage.toLocaleString()} yds`,
+                course.region,
+              ].filter(Boolean).join(' · ')
+              return facts ? <div className="facts">{facts}</div> : null
+            })()}
+          </div>
+
+          <div className="action-btns">
+            {course.website && (
+              <button onClick={() => window.open(`https://${course.website}`, '_blank', 'noopener')}>
+                <span className="icon">🌐</span>Website
+              </button>
             )}
+            {course.phone && (
+              <button onClick={() => { window.location.href = `tel:${course.phone.replace(/[^+\d]/g, '')}` }}>
+                <span className="icon">📞</span>Call
+              </button>
+            )}
+            <button onClick={() => window.open(`https://maps.google.com/?daddr=${course.lat},${course.lng}`, '_blank', 'noopener')}>
+              <span className="icon">🧭</span>Directions
+            </button>
           </div>
-        </div>
-      </div>
 
-      <div className="course-meta">
-        <div className="loc">{[course.city, course.state, course.country].filter(Boolean).join(', ')}</div>
-        {(() => {
-          const facts = [
-            course.access,
-            course.par && `Par ${course.par}`,
-            course.yardage && `${course.yardage.toLocaleString()} yds`,
-            course.region,
-          ].filter(Boolean).join(' · ')
-          return facts ? <div className="facts">{facts}</div> : null
-        })()}
-      </div>
-
-      <div className="action-btns">
-        {course.website && (
-          <button onClick={() => window.open(`https://${course.website}`, '_blank', 'noopener')}>
-            <span className="icon">🌐</span>Website
-          </button>
-        )}
-        {course.phone && (
-          <button onClick={() => { window.location.href = `tel:${course.phone.replace(/[^+\d]/g, '')}` }}>
-            <span className="icon">📞</span>Call
-          </button>
-        )}
-        <button onClick={() => window.open(`https://maps.google.com/?daddr=${course.lat},${course.lng}`, '_blank', 'noopener')}>
-          <span className="icon">🧭</span>Directions
-        </button>
-      </div>
-
-      <div className="scores-strip">
-        <div className="score-box">
-          {course.rating != null
-            ? <div className="val">{course.rating.toFixed(1)}</div>
-            : <div className="val empty">No ratings</div>}
-          <div className="lbl">Avg</div>
-        </div>
-        <div className="score-box">
-          {yourScore != null
-            ? <div className="val">{yourScore.toFixed(1)}</div>
-            : <div className="val empty">Not rated</div>}
-          <div className="lbl">You</div>
-        </div>
-        <div className="score-box">
-          {course.friendsScore != null
-            ? <div className="val">{course.friendsScore.toFixed(1)}</div>
-            : <div className="val empty">—</div>}
-          <div className="lbl">Friends</div>
-        </div>
-      </div>
-
-      <button className="rate-cta" onClick={() => onStartRank(courseId)}>
-        {yourScore != null ? 'Re-rank this course' : 'I played here — rank it'}
-      </button>
-
-      {course.photos.length > 0 && (
-        <>
-          <div className="section-label">Photos</div>
-          <div className="photo-strip">
-            {course.photos.map((p, i) => <Photo key={i} photo={p} className="ph" />)}
-          </div>
-        </>
-      )}
-
-      <div className="section-label">Notes</div>
-      <div className="note-list">
-        {checkin && (
-          <div className="note">
-            <div className="avatar">{currentUser.avatar}</div>
-            <div className="body">
-              <div className="who">@{currentUser.username} (you)</div>
-              <div className="txt">{checkin.note}</div>
+          <div className="scores-strip">
+            <div className="score-box">
+              {course.rating != null
+                ? <div className="val">{course.rating.toFixed(1)}</div>
+                : <div className="val empty">No ratings</div>}
+              <div className="lbl">Avg</div>
             </div>
-            <ScorePill score={yourScore} small />
-          </div>
-        )}
-        {course.notes.length || checkin ? course.notes.map((n, i) => (
-          <div className="note" key={i}>
-            <div className="avatar">{n.avatar}</div>
-            <div className="body">
-              <div className="who">@{n.user}</div>
-              <div className="txt">{n.text}</div>
+            <div className="score-box">
+              {yourScore != null
+                ? <div className="val">{yourScore.toFixed(1)}</div>
+                : <div className="val empty">Not rated</div>}
+              <div className="lbl">You</div>
             </div>
-            <ScorePill score={n.score} small />
+            <div className="score-box">
+              {course.friendsScore != null
+                ? <div className="val">{course.friendsScore.toFixed(1)}</div>
+                : <div className="val empty">—</div>}
+              <div className="lbl">Friends</div>
+            </div>
           </div>
-        )) : <div className="empty-state">No notes yet — be the first to add one.</div>}
+
+          <button className="rate-cta" onClick={() => onStartRank(courseId)}>
+            {yourScore != null ? 'Re-rank this course' : 'I played here — rank it'}
+          </button>
+
+          <PhotoGallery uploads={uploads} onAdd={addPhoto} onRemove={dropUpload}
+            uploading={uploading} error={uploadError} />
+
+          <div className="section-label">Notes</div>
+          <div className="note-list">
+            {checkin && (
+              <div className="note">
+                <div className="avatar">{currentUser.avatar}</div>
+                <div className="body">
+                  <div className="who">@{currentUser.username} (you)</div>
+                  <div className="txt">{checkin.note}</div>
+                </div>
+                <ScorePill score={yourScore} small />
+              </div>
+            )}
+            {course.notes.length || checkin ? course.notes.map((n, i) => (
+              <div className="note" key={i}>
+                <div className="avatar">{n.avatar}</div>
+                <div className="body">
+                  <div className="who">@{n.user}</div>
+                  <div className="txt">{n.text}</div>
+                </div>
+                <ScorePill score={n.score} small />
+              </div>
+            )) : <div className="empty-state">No notes yet — be the first to add one.</div>}
+          </div>
+        </div>
+
+        {desktop && (
+          <aside className="course-aside">
+            <div className="aside-card">
+              <CourseMap lat={course.lat} lng={course.lng} zoom={15}
+                layer={SATELLITE_LAYER} interactive className="aside-map" />
+            </div>
+            <div className="aside-meta">
+              <div className="k">Imagery tier</div>
+              <div className="v">{{ flagship: 'Flagship', known: 'Well known', longTail: 'Long tail' }[tier] ?? '—'}</div>
+              <div className="k">Sources</div>
+              <div className="v">{sources.length ? sources.join(' · ') : 'Illustration only'}</div>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   )
+
+  // Portalled to the body so the page can be wider than the phone frame on a
+  // desktop viewport; on mobile the CSS pins it back to the same 430px column.
+  return createPortal(page, document.body)
 }
 
 /* ---------------- Tabs ---------------- */
@@ -590,9 +574,10 @@ export default function App() {
           onToggleBookmark={toggleBookmark}
           onStartRank={(id) => setRanking(id)} />
       )}
-      {ranking && (
+      {ranking && createPortal(
         <RankFlow courseId={ranking} store={store}
-          onDone={finishRank} onCancel={() => setRanking(null)} />
+          onDone={finishRank} onCancel={() => setRanking(null)} />,
+        document.body,
       )}
     </div>
   )

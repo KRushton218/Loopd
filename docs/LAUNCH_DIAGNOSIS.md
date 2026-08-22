@@ -18,7 +18,7 @@ egress, so it was confirmed via the Actions API rather than an HTTP fetch.)
 | Deploy workflow on `main` | ✅ Run #1 succeeded (build + deploy jobs) |
 | `vite.config.js` base path | ✅ `base: './'` — correct for the `/Loopd/` subpath |
 | Runtime smoke test (Chromium, 390×844) | ✅ Feed renders, all four tabs navigate, map opens, no console errors |
-| External runtime dependencies | ✅ Only OSM tiles (attributed); photos are CSS gradients, no CDN fonts/scripts |
+| External runtime dependencies | ✅ OSM tiles, Esri World Imagery, Wikimedia Commons — all keyless and attributed in-app; no CDN fonts/scripts |
 | localStorage persistence | ✅ Wrapped in try/catch (private-mode safe) |
 | Deep links / 404.html | ✅ Not needed — single-URL app, no client-side routes |
 
@@ -114,7 +114,8 @@ Directions should prefer an Apple Maps deep link on iOS.)
 | **Leaderboard rows/podium** | Not tappable | Link to user profiles; also scoped variants (friends-only, by state) are just filters on the materialized view | 2 |
 | **Followers / Following counts** on Profile | Static mock numbers (128/143) | Counts from `follows` + tappable follower/following list screens | 2 |
 | **Guide cards** (Lists → Guides) | Render title/source/count, not tappable | Guide detail screen backed by `lists`/`list_items`; editorial content entered as data (PLAN Phase 4). Licensing note: "Golf Digest" titles are mock — real guides need either original editorial or a licensing conversation | 4 |
-| **Feed photos / course photo strip** | CSS-gradient placeholders | Real photos from Supabase Storage w/ CDN transforms; needs the capture/upload flow (`expo-image-manipulator` client resize) and pre-publish moderation scan (App Store 1.2) | 2 |
+| **Feed photos** | CSS-gradient placeholders | Real photos from Supabase Storage w/ CDN transforms; the course page already has the capture/downscale/verify flow (`src/uploads.js`) to reuse, and still needs the pre-publish moderation scan (App Store 1.2) | 2 |
+| **Course photos** | ~~CSS-gradient placeholders~~ **Now real**: tiered provider imagery — satellite basemap + Wikimedia Commons keyless today, SkyFi archive and Google Places behind config; plus member uploads with geotag verification. See [IMAGERY.md](IMAGERY.md) | Persistence moves to Supabase Storage; the client-side verifier becomes the *first* pass in front of a server-side vision scan, not the only one | 1–2 |
 
 ## D. Mock data structures in `data.js` → real sources
 
@@ -129,14 +130,14 @@ Directions should prefer an Apple Maps deep link on iOS.)
 | `guides` | 4 hardcoded cards | `lists` / `list_items` rows, editorial tooling = SQL inserts at first | Phase 4 |
 | `leaderboard` incl. `delta` ("+3 this month") | Hardcoded | Materialized view `count(distinct course_id)` over `check_ins`, refreshed on schedule; delta = same count windowed to 30 days | Phase 2 |
 | `notes` per course | Hardcoded | `check_ins.note` joined w/ user; needs **report/block** on every note/photo surface (App Store rule 1.2 — launch blocker for App Review, PLAN §7) | 2 |
-| Course photos (`grad` gradients) | CSS gradients | Supabase Storage paths | See C above |
+| Course photos (`grad` gradients) | Last-resort fallback only — real imagery resolves through `src/imagery.js` | Supabase Storage paths for member photos; provider URLs cached by metadata | See C above |
 | `userById` / `courseById` helpers | Array `.find` | Become API/query calls — the prototype's "every screen reads from data.js" discipline (its stated design goal) pays off here: swap the module for a data layer, UI untouched | 0–1 |
 
 ## E. Derived/visual elements with a specific replacement
 
 | Element | Today | Real version |
 |---|---|---|
-| **Course hero silhouette** (`CourseSilhouette`) | Seeded-random SVG fairways/greens/bunkers — decorative, not the actual course | **Mapbox Static Images API** hero: styled real map centered on the course pin (PLAN §3). Upgrade path to true hole polygons = OSM interior detail where mapped (open follow-up #2), else iGolf/Golfbert ($5k+/yr, sales-led) only when GPS-grade features justify it |
+| **Course hero** | ~~Seeded-random SVG silhouette~~ **Now a media carousel**: real Esri/Maxar satellite of the actual course (keyless), Wikimedia photos, verified member photos, with SkyFi archive + Google Places behind config. The silhouette survives only as the last-resort slide when every provider comes back empty | Swap `SATELLITE_LAYER` for Mapbox Satellite once there is a token (PLAN §3) — one object, same shape. Upgrade path to true hole polygons = OSM interior detail where mapped (open follow-up #2), else iGolf/Golfbert ($5k+/yr, sales-led) only when GPS-grade features justify it |
 | **Score pill color logic** | `< 8.5` renders "mid" | Keep — pure client style |
 | **Map legend / pin colors** | played/bookmarked/other from localStorage | Same, from server lists |
 | **OSM tile layer + attribution** | `tile.openstreetmap.org` | Mapbox GL custom style (Loopd's visual identity); keep OSM *data* attribution wherever OSM-derived course data is shown — ODbL requires it even off the map |

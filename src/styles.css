@@ -353,8 +353,10 @@ body {
 
 /* ---------- Course page ---------- */
 .course-page {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  max-width: 430px;
+  margin: 0 auto;
   background: var(--bg);
   z-index: 40;
   overflow-y: auto;
@@ -519,8 +521,10 @@ body {
 
 /* ---------- Rank flow ---------- */
 .rank-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  max-width: 430px;
+  margin: 0 auto;
   background: rgba(10, 25, 17, 0.45);
   z-index: 60;
   display: flex;
@@ -640,4 +644,272 @@ body {
   font-size: 11px;
   color: var(--ink-3);
   text-align: center;
+}
+
+
+/* ---------- Course imagery ---------- */
+
+/* Leaflet's panes sit at z-index 400–700. Without a stacking context here they
+   would paint straight over the hero title and the back button. */
+.media-carousel {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  isolation: isolate;
+  background: var(--green-100);
+}
+.media-track {
+  display: flex;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.media-track::-webkit-scrollbar { display: none; }
+.media-slide {
+  position: relative;
+  flex: 0 0 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  background: var(--green-100);
+}
+.media-slide > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.media-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-grad { width: 100%; height: 100%; }
+.media-map, .course-map { position: absolute; inset: 0; }
+.media-skeleton {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(100deg, #dde8df 30%, #eaf2eb 50%, #dde8df 70%) 0 0 / 300% 100%;
+  animation: shimmer 1.4s linear infinite;
+  color: var(--ink-3); font-size: 13px; font-weight: 600;
+}
+@keyframes shimmer { to { background-position: -300% 0; } }
+
+.media-dots {
+  position: absolute;
+  left: 0; right: 0; bottom: 62px;
+  display: flex; justify-content: center; gap: 5px;
+  z-index: 3;
+  pointer-events: none;
+}
+.media-dots button {
+  width: 6px; height: 6px;
+  border: none; border-radius: 50%; padding: 0;
+  background: rgba(255,255,255,0.55);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.media-dots button.on { background: #fff; width: 16px; border-radius: 3px; }
+
+/* Arrows are a pointer affordance; touch gets the swipe instead. */
+.media-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px; height: 34px;
+  border: none; border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  color: var(--ink);
+  font-size: 20px; line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+  display: none;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+}
+.media-arrow.left { left: 10px; }
+.media-arrow.right { right: 10px; }
+@media (hover: hover) and (pointer: fine) {
+  .media-carousel:hover .media-arrow { display: block; }
+}
+
+/* Attribution is a licence condition for Esri, Commons and Google alike, so it
+   renders on the slide rather than being tucked away in an About screen. */
+.media-credit {
+  position: absolute;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 110px);
+  z-index: 3;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(10, 25, 17, 0.55);
+  backdrop-filter: blur(6px);
+  color: rgba(255,255,255,0.92);
+  font-size: 10.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.media-credit a { color: inherit; }
+.media-credit em { font-style: normal; opacity: 0.65; }
+.media-credit b { font-weight: 700; }
+
+.slide-badges { position: absolute; left: 12px; bottom: 62px; z-index: 3; }
+
+/* ---------- Verification ---------- */
+.verify-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+  background: var(--green-100); color: var(--green-700);
+}
+.verify-badge i {
+  font-style: normal;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  background: var(--green-600); color: #fff;
+}
+.verify-badge.wait { background: #fdf3e0; color: #8a5f16; }
+.verify-badge.wait i { background: var(--amber); }
+.verify-badge.bad { background: #fbeaea; color: #8f2f2f; }
+.verify-badge.bad i { background: #c04a4a; }
+
+/* ---------- Upload gallery ---------- */
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 0 16px;
+}
+.upload {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+  margin: 0;
+}
+.upload.bad { border-color: #e7c4c4; }
+.upload img { width: 100%; height: 110px; object-fit: cover; display: block; }
+.upload.bad img { filter: grayscale(0.7) brightness(0.95); }
+.upload figcaption {
+  padding: 8px 9px 9px;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+}
+.upload .why { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
+.upload-remove {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 24px; height: 24px;
+  border: none; border-radius: 50%;
+  background: rgba(10,25,17,0.6);
+  color: #fff; font-size: 12px;
+  cursor: pointer;
+}
+
+.add-photo {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 5px;
+  height: 100%;
+  min-height: 110px;
+  border: 1.5px dashed #bcccc1;
+  border-radius: 12px;
+  background: var(--green-50);
+  color: var(--green-700);
+  cursor: pointer;
+  text-align: center;
+  padding: 12px;
+}
+.add-photo.compact { min-height: 158px; }
+.add-photo.busy { opacity: 0.6; cursor: progress; }
+.add-photo .plus { font-size: 22px; line-height: 1; }
+.add-photo .label { font-size: 13px; font-weight: 700; }
+.add-photo .hint { font-size: 11px; color: var(--ink-3); }
+/* Inside the carousel the slot fills the frame instead of sitting in a grid. */
+.media-slide .add-photo { border-radius: 0; border: none; }
+
+.upload-error {
+  margin: 10px 16px 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #fbeaea;
+  color: #8f2f2f;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.upload-note {
+  padding: 10px 16px 4px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.45;
+}
+
+/* ---------- Desktop course page ---------- */
+@media (min-width: 1024px) {
+  .course-page.desktop {
+    max-width: none;
+    background: rgba(12, 28, 20, 0.55);
+    backdrop-filter: blur(3px);
+    padding: 28px 24px;
+  }
+  .course-page.desktop .course-scroll {
+    max-width: 1120px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
+    gap: 20px;
+  }
+  .course-page.desktop .course-main {
+    background: var(--bg);
+    border-radius: 20px;
+    overflow: hidden;
+    padding-bottom: 12px;
+  }
+  .course-page.desktop .course-hero { height: 380px; }
+  .course-page.desktop .hero-bottom h1 { font-size: 30px; }
+  .course-page.desktop .media-dots { bottom: 72px; }
+  .course-page.desktop .slide-badges { bottom: 72px; }
+  .course-page.desktop .action-btns button { font-size: 13.5px; padding: 12px 0; }
+  .course-page.desktop .note-list { padding-bottom: 16px; }
+
+  .course-aside {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .aside-card {
+    position: relative;
+    height: 380px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--green-100);
+    isolation: isolate;
+  }
+  .aside-map { position: absolute; inset: 0; }
+  .aside-map .leaflet-control-attribution { font-size: 9.5px; opacity: 0.8; }
+  .aside-meta {
+    background: var(--bg);
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    align-items: baseline;
+  }
+  .aside-meta .k {
+    font-size: 11px; font-weight: 800; color: var(--ink-3);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .aside-meta .v { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+
+  /* The rank sheet is portalled too — centre it instead of docking it to a
+     phone-width bottom edge. */
+  .rank-overlay { max-width: none; align-items: center; justify-content: center; }
+  .rank-sheet { max-width: 460px; border-radius: 20px; }
+}
+
+/* The course pin on the satellite hero and the desktop map. */
+.map-pin.course {
+  width: 26px; height: 26px;
+  background: var(--green-700);
+  border-width: 3px;
 }

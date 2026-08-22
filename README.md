@@ -30,7 +30,11 @@ Then visit http://localhost:5173.
   to-discover, so you can spot golf-trip clusters.
 - **Lists** — Played (ranked), Bookmarked, Recs, and editorial Guides
 - **Leaderboard** — most courses played
-- **Course pages** — ratings (average / you / friends), contact buttons, photos, notes
+- **Course pages** — ratings (average / you / friends), contact buttons, notes, and a
+  **real image carousel**: a satellite view of the actual course plus freely-licensed
+  photos, no API key required. Add your own photo and it's checked against the course
+  location before it goes on the page. On a desktop window the page opens wide, with
+  the carousel beside a live map. See [docs/IMAGERY.md](docs/IMAGERY.md).
 - **Profile** — your counts, your ranked list, your activity
 
 Courses and friends are mock data for now — the full production plan (native app,
@@ -38,5 +42,7 @@ real course database, live social graph) is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Stack
 
-Vite + React, Leaflet + OpenStreetMap for the map, localStorage for your data.
-No backend yet — by design; see the plan.
+Vite + React, Leaflet for the maps, OpenStreetMap for course search and street
+tiles, Esri World Imagery for satellite, Wikimedia Commons for photos —
+every one of them keyless, so the static build has no secrets in it.
+localStorage for your data. No backend yet — by design; see the plan.
